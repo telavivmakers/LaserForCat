@@ -149,51 +149,58 @@ public:
   virtual ~RawManouver() {}
 };
 
-class RepeatSplineManouver : public SplineManouver
+class RepeatRawManouver : public RawManouver
 {
 protected:
-  QuadPoint getNextQuadPoint() override;
   bool isFinished() override;
-  SplineManouver &_manouver;
+  Point getNextPoint() override;
+  RawManouver &_manouver;
 
 public:
-  RepeatSplineManouver(SplineManouver &manouver) : _manouver(manouver) {}
+  RepeatRawManouver(RawManouver &manouver) : _manouver(manouver) {}
   void reset() override { _manouver.reset(); }
 };
 
-bool RepeatSplineManouver::isFinished()
+bool RepeatRawManouver::isFinished()
 {
   return false;
 }
 
-QuadPoint RepeatSplineManouver::getNextQuadPoint()
+Point RepeatRawManouver::getNextPoint()
 {
   if (_manouver.isFinished())
   {
     _manouver.reset();
   }
-  return _manouver.getNextQuadPoint();
+  return _manouver.getNextPoint();
 }
-
-class TransformSplineManouver : public SplineManouver
+class TransformRawManouver : public RawManouver
 {
 protected:
-  QuadPoint getNextQuadPoint() override;
   bool isFinished() override;
+  Point getNextPoint() override;
   Point transformPoint(Point p);
-  SplineManouver &_manouver;
+  RawManouver &_manouver;
   float _scale;
   float _rotate;
   Point _translate;
+  bool _flipH;
+  bool _flipV;
 
 public:
-  TransformSplineManouver(SplineManouver &manouver, float scale, float rotate, Point translate = Point(0, 0));
+  TransformRawManouver(RawManouver &manouver, float scale, float rotate, Point translate = Point(0, 0), bool flipH = false, bool flipV = false);
 };
 
-TransformSplineManouver::TransformSplineManouver(SplineManouver &manouver, float scale, float rotate, Point translate) : _manouver(manouver), _scale(scale), _rotate(rotate), _translate(translate) {}
+TransformRawManouver::TransformRawManouver(RawManouver &manouver, float scale, float rotate, Point translate, bool flipH, bool flipV) : _manouver(manouver), _scale(scale), _rotate(rotate), _translate(translate), _flipH(flipH), _flipV(flipV) {}
 
-Point TransformSplineManouver::transformPoint(Point p)
+Point TransformRawManouver::transformPoint(Point p)
 {
+  if (_flipH) {
+    p.x = -p.x;
+  }
+  if (_flipV) {
+    p.y = -p.y;
+  }
   float x = p.x * _scale;
   float y = p.y * _scale;
   float x1 = x * cos(_rotate) - y * sin(_rotate);
@@ -201,59 +208,70 @@ Point TransformSplineManouver::transformPoint(Point p)
   return Point(x1 + _translate.x, y1 + _translate.y);
 }
 
-QuadPoint TransformSplineManouver::getNextQuadPoint()
-{
-  QuadPoint quad = _manouver.getNextQuadPoint();
-  return QuadPoint(
-      transformPoint(quad.p0),
-      transformPoint(quad.p1),
-      transformPoint(quad.p2),
-      transformPoint(quad.p3));
-}
-
-bool TransformSplineManouver::isFinished()
+bool TransformRawManouver::isFinished()
 {
   return _manouver.isFinished();
 }
 
-typedef vector<SplineManouver *> Manouvers;
-class SplineManouverSequence : public SplineManouver
+Point TransformRawManouver::getNextPoint()
+{
+  Point point = _manouver.getNextPoint();
+  return transformPoint(point);
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+typedef vector<RawManouver *> Manouvers;
+
+class RawManouverSequence : public RawManouver
 {
 protected:
-  QuadPoint getNextQuadPoint() override;
-  bool isFinished() override;
   Manouvers _manouvers;
   Manouvers::iterator _currentManouver;
+public:
+  RawManouverSequence(Manouvers manouvers) : _manouvers(manouvers), _currentManouver(manouvers.begin()) {}
+  bool isFinished() override;
+  Point getNextPoint() override;
+  void reset() override;
 };
 
-bool SplineManouverSequence::isFinished()
+bool RawManouverSequence::isFinished()
 {
   return _currentManouver == _manouvers.end();
 }
 
-QuadPoint SplineManouverSequence::getNextQuadPoint()
+Point RawManouverSequence::getNextPoint()
 {
   if (_currentManouver == _manouvers.end())
   {
-    return QuadPoint();
+    return Point();
   }
-  QuadPoint quad = (*_currentManouver)->getNextQuadPoint();
+  Point point = (*_currentManouver)->getNextPoint();
   if ((*_currentManouver)->isFinished())
   {
     _currentManouver++;
   }
-  return quad;
+  return point;
 }
 
+void RawManouverSequence::reset()
+{
+  _currentManouver = _manouvers.begin();
+  for (Manouvers::iterator it = _manouvers.begin(); it != _manouvers.end(); it++)
+  {
+    (*it)->reset();
+  }
+}
+
+//////////////////////////////////////////////////////////////////////////////////
 class PointwiseAddSplineManouvers : public SplineManouver
 {
 protected:
-  QuadPoint getNextQuadPoint() override;
-  bool isFinished() override;
   Manouvers &_manouvers;
 
 public:
   PointwiseAddSplineManouvers(Manouvers &manouvers) : _manouvers(manouvers) {}
+  QuadPoint getNextQuadPoint() override;
+  bool isFinished() override;
 };
 
 bool PointwiseAddSplineManouvers::isFinished()
@@ -293,6 +311,59 @@ QuadPoint PointwiseAddSplineManouvers::getNextQuadPoint()
   }
   return QuadPoint(p0, p1, p2, p3);
 }
+
+class PointwiseAddRawManouver : public RawManouver
+{
+protected:
+  Manouvers &_manouvers;
+  Manouvers::iterator _currentManouver;
+
+public:
+  PointwiseAddRawManouver(Manouvers &manouvers) : _manouvers(manouvers), _currentManouver(manouvers.begin()) {}
+  bool isFinished() override;
+  Point getNextPoint() override;
+  void reset() override;
+};
+
+bool PointwiseAddRawManouver::isFinished()
+{
+  return _currentManouver == _manouvers.end();
+}
+
+Point PointwiseAddRawManouver::getNextPoint()
+{
+  if (_currentManouver == _manouvers.end())
+  {
+    return Point();
+  }
+  Point point = (*_currentManouver)->getNextPoint();
+  if ((*_currentManouver)->isFinished())
+  {
+    _currentManouver++;
+  }
+  while (_currentManouver != _manouvers.end())
+  {
+    Point nextPoint = (*_currentManouver)->getNextPoint();
+    point.x += nextPoint.x;
+    point.y += nextPoint.y;
+    if (!(*_currentManouver)->isFinished())
+    {
+      break;
+    }
+    _currentManouver++;
+  }
+  return point;
+}
+
+void PointwiseAddRawManouver::reset()
+{
+  _currentManouver = _manouvers.begin();
+  for (Manouvers::iterator it = _manouvers.begin(); it != _manouvers.end(); it++)
+  {
+    (*it)->reset();
+  }
+}
+//////////////////////////////////////////////////////////////////////////////////
 
 constexpr float epsilon = 0.0001;
 
@@ -392,5 +463,5 @@ int main()
   points.push_back(Point(41, 1));
   points.push_back(Point(42, 0));
   points.push_back(Point(43, 1));
-  points.push_back(Point(44,
+  points.push_back(Point(44, 0));
 }
