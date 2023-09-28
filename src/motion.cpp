@@ -392,23 +392,27 @@ protected:
     _fractionPartOfT = _t - floor(_t+epsilon);
   }
 
-public:
-  void reset() override {
-    _splineManouver.reset();
+  void partialReset() {
     _SplineInputFinished = false;
     _t = 0;
     _lastQuad = _splineManouver.getNextQuadPoint();
     _fractionPartOfT = 0;
   }
+
+public:
+  void reset() override {
+    partialReset();
+    _splineManouver.reset();
+  }
   RawManouverFromSplineManouver(SplineManouver& splineManouver, float rate) :
       _splineManouver(splineManouver), _rate(rate) {
-      reset();
+      partialReset();
   }
   bool isFinished() override {
     if (!_SplineInputFinished) {
       return false;
     }
-    return _fractionPartOfT > 1.0;
+    return _fractionPartOfT + epsilon > 1.0 + _rate / 2.0;
   }
   Point getNextPoint() override {
     advanceT();
