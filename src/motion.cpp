@@ -17,6 +17,39 @@ public:
     this->x = x;
     this->y = y;
   }
+
+  // add arithmetic operators + += - -= * *=
+  Point operator+(const Point &p) const
+  {
+    return Point(x + p.x, y + p.y);
+  }
+  Point operator-(const Point &p) const
+  {
+    return Point(x - p.x, y - p.y);
+  }
+  Point operator*(const float &f) const
+  {
+    return Point(x * f, y * f);
+  }
+  Point &operator+=(const Point &p)
+  {
+    x += p.x;
+    y += p.y;
+    return *this;
+  }
+  Point &operator-=(const Point &p)
+  {
+    x -= p.x;
+    y -= p.y;
+    return *this;
+  }
+  Point &operator*=(const float &f)
+  {
+    x *= f;
+    y *= f;
+    return *this;
+  }
+
 };
 
 struct QuadPoint
@@ -47,10 +80,7 @@ Point spline(const QuadPoint &quad, float t)
   float b3 = .5 * (-3 * t3 + 4 * t2 + t);
   float b4 = .5 * (t3 - t2);
 
-  float x = quad.p0.x * b1 + quad.p1.x * b2 + quad.p2.x * b3 + quad.p3.x * b4;
-  float y = quad.p0.y * b1 + quad.p1.y * b2 + quad.p2.y * b3 + quad.p3.y * b4;
-
-  return Point(x, y);
+  return quad.p0 * b1 + quad.p1 * b2 + quad.p2 * b3 + quad.p3 * b4;
 }
 
 class SplineManouver
@@ -68,7 +98,7 @@ void addPreStartPoint(Points &points) {
   assert(points.size() > 1);
   Point p0 = points.front();
   Point p1 = points.at(1);
-  Point prevP = Point(p0.x - (p1.x - p0.x), p0.y - (p1.y - p0.y));
+  Point prevP = p0 - (p1-p0);
   points.push_front(prevP);
 }
 
@@ -76,7 +106,7 @@ void addPostEndPoint(Points &points) {
   assert(points.size() > 1);
   Point p0 = points.back();
   Point p1 = points.at(points.size() - 2);
-  Point postP = Point(p0.x + (p0.x - p1.x), p0.y + (p0.y - p1.y));
+  Point postP = p0 - (p1 - p0);
   points.push_back(postP);
 }
 
@@ -263,6 +293,7 @@ void RawManouverSequence::reset()
 }
 
 //////////////////////////////////////////////////////////////////////////////////
+/*
 class PointwiseAddSplineManouvers : public SplineManouver
 {
 protected:
@@ -311,7 +342,7 @@ QuadPoint PointwiseAddSplineManouvers::getNextQuadPoint()
   }
   return QuadPoint(p0, p1, p2, p3);
 }
-
+*/
 class PointwiseAddRawManouver : public RawManouver
 {
 protected:
@@ -419,6 +450,34 @@ public:
     return spline(_lastQuad, _fractionPartOfT);
   }
 };
+
+class linearRawManouver : public RawManouver {
+protected:
+  Point _p1;
+  float _t = 0;
+  float _rate;
+  Point totalDelta;
+
+  void advanceT() {
+    float oldT = _t;
+    _t += _rate;
+  }
+public:
+  linearRawManouver(Point p1, Point p2, int numberOfSteps) : _p1(p1),  {
+    _rate = 1.0 / numberOfSteps;
+    totalDelta = p2 - p1;
+  }
+
+  bool isFinished() override {
+    return _t + epsilon > 1.0;
+  }
+
+  Point getNextPoint() override {
+    advanceT();
+    return _p1 + totalDelta * _t;
+  }
+};
+
 
 int main()
 {
