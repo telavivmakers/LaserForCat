@@ -347,48 +347,40 @@ class PointwiseAddRawManouver : public RawManouver
 {
 protected:
   Manouvers &_manouvers;
-  Manouvers::iterator _currentManouver;
+  std::vector<Manouvers::iterator> _iterators;
 
 public:
-  PointwiseAddRawManouver(Manouvers &manouvers) : _manouvers(manouvers), _currentManouver(manouvers.begin()) {}
+  PointwiseAddRawManouver(Manouvers &manouvers);
   bool isFinished() override;
   Point getNextPoint() override;
   void reset() override;
 };
 
+PointwiseAddRawManouver::PointwiseAddRawManouver(Manouvers &manouvers) : _manouvers(manouvers) {};
+
 bool PointwiseAddRawManouver::isFinished()
 {
-  return _currentManouver == _manouvers.end();
+  for (Manouvers::iterator it = _manouvers.begin(); it != _manouvers.end(); it++)
+  {
+    if ((*it)->isFinished())
+    {
+      return true;
+    }
+  }
 }
 
 Point PointwiseAddRawManouver::getNextPoint()
 {
-  if (_currentManouver == _manouvers.end())
+  Point sum = Point(0, 0);
+  for (Manouvers::iterator it = _manouvers.begin(); it != _manouvers.end(); it++)
   {
-    return Point();
+    sum += (*it)->getNextPoint();
   }
-  Point point = (*_currentManouver)->getNextPoint();
-  if ((*_currentManouver)->isFinished())
-  {
-    _currentManouver++;
-  }
-  while (_currentManouver != _manouvers.end())
-  {
-    Point nextPoint = (*_currentManouver)->getNextPoint();
-    point.x += nextPoint.x;
-    point.y += nextPoint.y;
-    if (!(*_currentManouver)->isFinished())
-    {
-      break;
-    }
-    _currentManouver++;
-  }
-  return point;
+  return sum;
 }
 
 void PointwiseAddRawManouver::reset()
 {
-  _currentManouver = _manouvers.begin();
   for (Manouvers::iterator it = _manouvers.begin(); it != _manouvers.end(); it++)
   {
     (*it)->reset();
