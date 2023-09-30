@@ -448,16 +448,16 @@ protected:
   Point _p1;
   float _t = 0;
   float _rate;
-  Point totalDelta;
+  Point _totalDelta;
 
   void advanceT() {
     float oldT = _t;
     _t += _rate;
   }
 public:
-  linearRawManouver(Point p1, Point p2, int numberOfSteps) : _p1(p1),  {
+  linearRawManouver(Point p1, Point p2, int numberOfSteps) : _p1(p1)  {
     _rate = 1.0 / numberOfSteps;
-    totalDelta = p2 - p1;
+    _totalDelta = p2 - p1;
   }
 
   bool isFinished() override {
@@ -466,7 +466,7 @@ public:
 
   Point getNextPoint() override {
     advanceT();
-    return _p1 + totalDelta * _t;
+    return _p1 + _totalDelta * _t;
   }
 };
 
